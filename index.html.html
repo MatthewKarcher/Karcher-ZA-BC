@@ -15,7 +15,7 @@
         }
         .card-face {
             transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
-            backface-visibility: hidden;
+            backface-visibility: hidden; /* Prevents flickering on transition */
         }
         .card-front, .card-back {
             position: absolute;
@@ -42,28 +42,6 @@
             display: block;
             margin: auto;
         }
-        /* Logo styling improvements */
-        #logo {
-            max-height: 40px;
-            width: auto;
-            object-fit: contain;
-        }
-        /* Fallback for logo loading issues */
-        #logo.error {
-            display: none;
-        }
-        .logo-fallback {
-            display: none;
-            background: #FDE047;
-            color: #000;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 18px;
-        }
-        #logo.error + .logo-fallback {
-            display: inline-block;
-        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
@@ -82,11 +60,7 @@
                     <div class="flex-grow">
                         <!-- Header -->
                         <div class="text-center mb-6">
-                            <!-- Improved logo with fallback -->
-                            <div class="mb-6 flex justify-center">
-                                <img id="logo" src="https://i.imgur.com/tq2k5zD.png" alt="Kärcher Logo" class="h-10 object-contain">
-                                <div class="logo-fallback">KÄRCHER</div>
-                            </div>
+                            <img id="logo" src="https://i.imgur.com/tq2k5zD.png" alt="Kärcher Logo" class="h-10 mx-auto mb-6 object-contain">
                             <img id="profile-pic" class="w-32 h-32 rounded-full mx-auto border-4 border-amber-400 shadow-md object-cover" alt="Profile Picture">
                             <h1 id="name" class="text-2xl font-bold text-gray-800 mt-4"></h1>
                             <p id="title" class="text-gray-500 font-medium"></p>
@@ -129,6 +103,7 @@
 
     <script>
         // --- DATA ---
+        // Data for the business cards.
         const people = [
             {
                 name: "Denis De Clerk",
@@ -173,45 +148,31 @@
 
         // --- FUNCTIONS ---
 
-        function createVcf(person) {
-            const vCard = `BEGIN:VCARD
-VERSION:3.0
-N:${person.name.split(' ').pop()};${person.name.split(' ').slice(0, -1).join(' ')}
-FN:${person.name}
-TITLE:${person.title}
-ORG:Kärcher
-TEL;TYPE=CELL:${person.phone}
-EMAIL:${person.email}
-URL:${person.website}
-END:VCARD`;
-            return 'data:text/vcard;charset=utf-8,' + encodeURIComponent(vCard);
+        /**
+         * Creates a correctly formatted vCard string.
+         * @param {object} person - The person's data object.
+         * @returns {string} A valid vCard string.
+         */
+        function createVcfString(person) {
+            // Correctly formatted vCard string with newlines (\n)
+            return [
+                'BEGIN:VCARD',
+                'VERSION:3.0',
+                `N:${person.name.split(' ').pop()};${person.name.split(' ').slice(0, -1).join(' ')}`,
+                `FN:${person.name}`,
+                `TITLE:${person.title}`,
+                'ORG:Kärcher',
+                `TEL;TYPE=CELL:${person.phone}`,
+                `EMAIL:${person.email}`,
+                `URL:${person.website}`,
+                'END:VCARD'
+            ].join('\n');
         }
 
-        function generateQRCode(person) {
-            qrCodeContainer.innerHTML = '';
-            
-            // Create vCard data for QR code
-            const vCardData = `BEGIN:VCARD
-VERSION:3.0
-N:${person.name.split(' ').pop()};${person.name.split(' ').slice(0, -1).join(' ')}
-FN:${person.name}
-TITLE:${person.title}
-ORG:Kärcher
-TEL;TYPE=CELL:${person.phone}
-EMAIL:${person.email}
-URL:${person.website}
-END:VCARD`;
-
-            new QRCode(qrCodeContainer, {
-                text: vCardData,
-                width: 192,
-                height: 192,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        }
-
+        /**
+         * Renders the data for the selected person onto the card.
+         * @param {number} index - The index of the person in the people array.
+         */
         function renderCard(index) {
             currentUserIndex = index;
             const person = people[index];
@@ -231,13 +192,29 @@ END:VCARD`;
                 profilePicEl.src = `https://placehold.co/256x256/EAB308/000000?text=${person.name.split(' ').map(n=>n[0]).join('')}`;
             };
 
-            saveContactBtn.href = createVcf(person);
+            const vCardString = createVcfString(person);
+
+            // Set the "Save Contact" button link
+            saveContactBtn.href = 'data:text/vcard;charset=utf-8,' + encodeURIComponent(vCardString);
             saveContactBtn.download = `${person.name.replace(/\s/g, '_')}_contact.vcf`;
             
-            generateQRCode(person);
+            // Generate the QR Code with the vCard data
+            qrCodeContainer.innerHTML = ''; 
+            new QRCode(qrCodeContainer, {
+                text: vCardString,
+                width: 192,
+                height: 192,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+            
             updateButtonStyles();
         }
         
+        /**
+         * Updates the styling of the person selector buttons.
+         */
         function updateButtonStyles() {
             Array.from(personSelector.children).forEach((btn, i) => {
                 if (i === currentUserIndex) {
@@ -249,23 +226,14 @@ END:VCARD`;
                 }
             });
         }
-
-        function handleInitialLoad() {
-            const hash = window.location.hash.substring(1);
-            if (hash) {
-                const personIndex = people.findIndex(p => p.id === hash);
-                if (personIndex !== -1) {
-                    renderCard(personIndex);
-                    return;
-                }
-            }
-            renderCard(0);
-        }
         
+        /**
+         * Sets up the initial state of the application.
+         */
         function initializeApp() {
-            // Handle logo loading error
+             // Handle logo loading error by replacing it with a placeholder
             logoEl.onerror = () => {
-                logoEl.classList.add('error');
+                logoEl.src = 'https://placehold.co/200x50/FDE047/000000?text=KÄRCHER';
             };
 
             // Create buttons for each person
@@ -282,7 +250,8 @@ END:VCARD`;
                 personSelector.appendChild(button);
             });
             
-            handleInitialLoad();
+            // Render the initial card
+            renderCard(0);
         }
 
         // --- EVENT LISTENERS ---
